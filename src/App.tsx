@@ -333,115 +333,229 @@ export default function App() {
     else setSelections((prev: any) => ({ ...prev, [category]: value }));
   };
 
-  const handleDownloadPDF = async () => {
-    if (!exportRef.current) return;
-    setIsExporting(true);
-    setError(null);
-    
-    try {
-      // Ensure the export container is visible for capture but off-screen
-      const exportContainer = exportRef.current;
-      exportContainer.style.position = 'fixed';
-      exportContainer.style.top = '0';
-      exportContainer.style.left = '0';
-      exportContainer.style.zIndex = '-1';
-      exportContainer.style.visibility = 'visible';
-
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      const canvas = await html2canvas(exportContainer, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: selectedTemplate === 'technical' ? '#0f172a' : (selectedTemplate === 'classic' ? '#fdfbf7' : (selectedTemplate === 'elegant' ? '#faf7f2' : '#ffffff')),
-        logging: false,
-        windowWidth: 1200,
-        windowHeight: 1600
-      });
-      
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
-      
-      const imgProps = pdf.getImageProperties(imgData);
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`${analysisData.cv[activeLang].personal_info.fullName.replace(/\s+/g, '_')}_CV.pdf`);
-      
-      // Reset export container
-      exportContainer.style.position = '';
-      exportContainer.style.top = '';
-      exportContainer.style.left = '';
-      exportContainer.style.zIndex = '';
-      exportContainer.style.visibility = '';
-    } catch (err: any) {
-      console.error("PDF Export Error:", err);
-      setError("PDF oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.");
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   const handleDownloadDocx = async () => {
     if (!analysisData || !analysisData.cv) return;
     setIsExporting(true);
     
     try {
-      const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = await import('docx');
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, ImageRun, Table, TableRow, TableCell, WidthType, BorderStyle, VerticalAlign } = await import('docx');
       const { saveAs } = await import('file-saver');
       
       const langData = activeLang === 'tr' ? analysisData.cv.tr : analysisData.cv.en;
       const personalInfo = langData.personal_info || {};
       const isTr = activeLang === 'tr';
 
-      const doc = new Document({
-        sections: [{
-          properties: {},
-          children: [
-            new Paragraph({
-              text: personalInfo.fullName,
-              heading: HeadingLevel.HEADING_1,
-              alignment: AlignmentType.CENTER,
-            }),
-            new Paragraph({
-              text: personalInfo.title,
-              alignment: AlignmentType.CENTER,
-            }),
-            new Paragraph({
-              text: String(personalInfo.contact || "").replace(/\|/g, ' • '),
-              alignment: AlignmentType.CENTER,
-              spacing: { after: 400 },
-            }),
+      const base64ToUint8Array = (base64: string) => {
+        const parts = base64.split(',');
+        const binaryString = window.atob(parts.length > 1 ? parts[1] : parts[0]);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes;
+      };
 
-            new Paragraph({ text: isTr ? "PROFİL" : "PROFILE", heading: HeadingLevel.HEADING_2 }),
-            new Paragraph({ text: isTr ? (selections.summary ? langData.summary.proposed : langData.summary.original) : (langData.summary || ""), spacing: { after: 200 } }),
+      const getImageType = (base64: string) => {
+        const match = base64.match(/^data:image\/([a-z]+);base64,/);
+        const type = match ? match[1] : "png";
+        if (type === 'jpeg') return 'jpg';
+        return type;
+      };
 
-            new Paragraph({ text: isTr ? "DENEYİM" : "EXPERIENCE", heading: HeadingLevel.HEADING_2 }),
-            ...safeArray(langData.experiences).flatMap((exp: any) => [
-              new Paragraph({
-                children: [
-                  new TextRun({ text: exp.title, bold: true }),
-                  new TextRun({ text: ` | ${exp.company} | ${exp.date}`, italics: true }),
-                ],
-              }),
-              ...safeArray(isTr ? (selections.experiences[exp.id] ? exp.proposed_achievements : exp.original_desc) : exp.proposed_achievements).map(desc => 
-                new Paragraph({ text: `• ${desc}`, indent: { left: 720 } })
-              ),
-              new Paragraph({ text: "", spacing: { after: 100 } }),
-            ]),
+      let photoImageRun = null;
+      if (photoData) {
+        try {
+          const photoBytes = base64ToUint8Array(photoData);
+          const photoType = getImageType(photoData);
+          photoImageRun = new ImageRun({
+            data: photoBytes,
+            transformation: { width: 100, height: 100 },
+            type: photoType as any,
+          });
+        } catch (e) {
+          console.error("Photo processing error:", e);
+        }
+      }
 
-            new Paragraph({ text: isTr ? "EĞİTİM" : "EDUCATION", heading: HeadingLevel.HEADING_2 }),
-            ...safeArray(isTr ? (selections.education ? langData.education.proposed_list : [{ degree: langData.education.original || "" }]) : langData.education).map((edu: any) => 
-              new Paragraph({ text: `${edu.degree} - ${edu.school} (${edu.date || ""})` })
-            ),
-          ],
-        }],
+      const isClassic = selectedTemplate === 'classic';
+      const isMinimal = selectedTemplate === 'minimal';
+      const isElegant = selectedTemplate === 'elegant';
+      const isTechnical = selectedTemplate === 'technical';
+      const isProfessional = selectedTemplate === 'professional';
+      const isModern = selectedTemplate === 'modern';
+
+      // Design variables
+      const primaryColor = isTechnical ? "38bdf8" : (isProfessional ? "2563eb" : (isElegant ? "8c7867" : (isModern ? "4f46e5" : "000000")));
+      const secondaryColor = isTechnical ? "94a3b8" : "64748b";
+      const font = isClassic || isElegant ? "Times New Roman" : (isTechnical ? "Courier New" : "Arial");
+      const headingSize = isTechnical ? 20 : 24;
+
+      // Helper to create headings
+      const createHeading = (text: string) => {
+        const borderStyle = isMinimal ? BorderStyle.NONE : (isTechnical ? BorderStyle.DOTTED : BorderStyle.SINGLE);
+        return new Paragraph({
+          children: [new TextRun({ text, bold: true, color: primaryColor, size: headingSize, font, allCaps: true })],
+          spacing: { before: 400, after: 200 },
+          border: { bottom: { color: primaryColor, space: 1, style: borderStyle, size: 6 } },
+          alignment: isMinimal ? AlignmentType.LEFT : (isProfessional ? AlignmentType.LEFT : AlignmentType.CENTER)
+        });
+      };
+
+      const createSubHeading = (text: string, sub: string, date: string) => new Paragraph({
+        children: [
+          new TextRun({ text, bold: true, size: 22, font }),
+          new TextRun({ text: ` | ${sub}`, italics: isElegant, size: 20, font, color: secondaryColor }),
+          new TextRun({ text: ` (${date})`, size: 18, font, color: "94a3b8" })
+        ],
+        spacing: { before: 200, after: 100 },
+        alignment: isMinimal ? AlignmentType.LEFT : (isProfessional ? AlignmentType.LEFT : AlignmentType.CENTER)
       });
 
+      let children: any[] = [];
+
+      if (isProfessional) {
+        // 2-Column Layout using Table
+        const leftCol: any[] = [];
+        if (photoImageRun) {
+          leftCol.push(new Paragraph({ children: [photoImageRun], alignment: AlignmentType.CENTER, spacing: { after: 200 } }));
+        }
+        leftCol.push(new Paragraph({ children: [new TextRun({ text: personalInfo.fullName, bold: true, size: 28, font })], alignment: AlignmentType.CENTER }));
+        leftCol.push(new Paragraph({ children: [new TextRun({ text: personalInfo.title, color: primaryColor, size: 20, font, bold: true })], alignment: AlignmentType.CENTER, spacing: { after: 400 } }));
+        
+        leftCol.push(createHeading(isTr ? "İLETİŞİM" : "CONTACT"));
+        String(personalInfo.contact || "").split('|').forEach(item => {
+          leftCol.push(new Paragraph({ children: [new TextRun({ text: `• ${item.trim()}`, size: 16, font })] }));
+        });
+
+        // Skills
+        const finalSkills = isTr ? (selections.skills_and_languages ? safeArray(langData.skills_and_languages.proposed) : safeArray(langData.skills_and_languages.original)) : safeArray(langData.skills_and_languages);
+        if (finalSkills.length > 0) {
+          leftCol.push(new Paragraph({ children: [new TextRun({ text: isTr ? "YETENEKLER" : "SKILLS", bold: true, size: 18, font, color: primaryColor })], spacing: { before: 300, after: 100 } }));
+          finalSkills.forEach((s: string) => {
+            leftCol.push(new Paragraph({ children: [new TextRun({ text: `• ${s}`, size: 16, font })] }));
+          });
+        }
+
+        const rightCol: any[] = [];
+        rightCol.push(createHeading(isTr ? "PROFİL" : "PROFILE"));
+        rightCol.push(new Paragraph({ 
+          children: [new TextRun({ text: isTr ? (selections.summary ? langData.summary.proposed : langData.summary.original) : (langData.summary || ""), font })],
+          spacing: { after: 200 }
+        }));
+
+        rightCol.push(createHeading(isTr ? "DENEYİM" : "EXPERIENCE"));
+        safeArray(langData.experiences).forEach((exp: any) => {
+          rightCol.push(createSubHeading(exp.title, exp.company, exp.date));
+          safeArray(isTr ? (selections.experiences[exp.id] ? exp.proposed_achievements : exp.original_desc) : exp.proposed_achievements).forEach(desc => {
+            rightCol.push(new Paragraph({ children: [new TextRun({ text: `• ${desc}`, size: 18, font })], indent: { left: 360 } }));
+          });
+        });
+
+        // Dynamic Sections for Professional
+        const finalDynamics = safeArray(langData.dynamic_sections).map((sec: any) => ({
+          ...sec, finalDesc: isTr ? (selections.dynamic[sec.id] ? safeArray(sec.proposed_items) : safeArray(sec.original_desc)) : safeArray(sec.proposed_items)
+        }));
+        finalDynamics.forEach((sec: any) => {
+          rightCol.push(createHeading(sec.title));
+          sec.finalDesc.forEach((item: string) => {
+            rightCol.push(new Paragraph({ children: [new TextRun({ text: `• ${item}`, size: 18, font })], indent: { left: 360 } }));
+          });
+        });
+
+        children.push(new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          borders: {
+            top: { style: BorderStyle.NONE },
+            bottom: { style: BorderStyle.NONE },
+            left: { style: BorderStyle.NONE },
+            right: { style: BorderStyle.NONE },
+            insideHorizontal: { style: BorderStyle.NONE },
+            insideVertical: { style: BorderStyle.NONE },
+          },
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({ children: leftCol, width: { size: 35, type: WidthType.PERCENTAGE }, borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } }, verticalAlign: VerticalAlign.TOP }),
+                new TableCell({ children: rightCol, width: { size: 65, type: WidthType.PERCENTAGE }, borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } }, verticalAlign: VerticalAlign.TOP })
+              ]
+            })
+          ]
+        }));
+      } else {
+        // Standard Layout (Modern, Classic, Minimal, Elegant, Technical)
+        // Header
+        if (isMinimal) {
+           if (photoImageRun) {
+             children.push(new Paragraph({ children: [photoImageRun], alignment: AlignmentType.LEFT, spacing: { after: 200 } }));
+           }
+           children.push(new Paragraph({ children: [new TextRun({ text: personalInfo.fullName, bold: true, size: 36, font })], alignment: AlignmentType.LEFT }));
+           children.push(new Paragraph({ children: [new TextRun({ text: personalInfo.title, size: 24, font, color: primaryColor, bold: true })], alignment: AlignmentType.LEFT }));
+           children.push(new Paragraph({ children: [new TextRun({ text: String(personalInfo.contact || "").replace(/\|/g, ' • '), size: 18, font, color: secondaryColor })], alignment: AlignmentType.LEFT, spacing: { after: 400 } }));
+        } else if (isTechnical) {
+           if (photoImageRun) {
+             children.push(new Paragraph({ children: [photoImageRun], alignment: AlignmentType.CENTER, spacing: { after: 200 } }));
+           }
+           children.push(new Paragraph({ children: [new TextRun({ text: personalInfo.fullName, bold: true, size: 36, font, color: "000000" })], alignment: AlignmentType.CENTER }));
+           children.push(new Paragraph({ children: [new TextRun({ text: personalInfo.title, size: 24, font, color: primaryColor, bold: true })], alignment: AlignmentType.CENTER }));
+           children.push(new Paragraph({ children: [new TextRun({ text: String(personalInfo.contact || "").replace(/\|/g, ' • '), size: 18, font, color: secondaryColor })], alignment: AlignmentType.CENTER, spacing: { after: 400 } }));
+        } else {
+           if (photoImageRun) {
+             children.push(new Paragraph({ children: [photoImageRun], alignment: AlignmentType.CENTER, spacing: { after: 200 } }));
+           }
+           children.push(new Paragraph({ children: [new TextRun({ text: personalInfo.fullName, bold: true, size: 36, font })], alignment: AlignmentType.CENTER }));
+           children.push(new Paragraph({ children: [new TextRun({ text: personalInfo.title, size: 24, font, color: primaryColor, bold: true })], alignment: AlignmentType.CENTER }));
+           children.push(new Paragraph({ children: [new TextRun({ text: String(personalInfo.contact || "").replace(/\|/g, ' • '), size: 18, font, color: secondaryColor })], alignment: AlignmentType.CENTER, spacing: { after: 400 } }));
+        }
+
+        children.push(createHeading(isTr ? "PROFİL" : "PROFILE"));
+        children.push(new Paragraph({ 
+          children: [new TextRun({ text: isTr ? (selections.summary ? langData.summary.proposed : langData.summary.original) : (langData.summary || ""), font })],
+          spacing: { after: 200 }
+        }));
+
+        children.push(createHeading(isTr ? "DENEYİM" : "EXPERIENCE"));
+        safeArray(langData.experiences).forEach((exp: any) => {
+          children.push(createSubHeading(exp.title, exp.company, exp.date));
+          safeArray(isTr ? (selections.experiences[exp.id] ? exp.proposed_achievements : exp.original_desc) : exp.proposed_achievements).forEach(desc => {
+            children.push(new Paragraph({ children: [new TextRun({ text: `• ${desc}`, size: 18, font })], indent: { left: 360 } }));
+          });
+        });
+
+        // Skills
+        const finalSkills = isTr ? (selections.skills_and_languages ? safeArray(langData.skills_and_languages.proposed) : safeArray(langData.skills_and_languages.original)) : safeArray(langData.skills_and_languages);
+        if (finalSkills.length > 0) {
+          children.push(createHeading(isTr ? "YETENEKLER" : "SKILLS"));
+          children.push(new Paragraph({ children: [new TextRun({ text: finalSkills.join(" • "), font, size: 18 })] }));
+        }
+
+        // Education
+        const finalEducation = isTr ? (selections.education ? safeArray(langData.education.proposed_list) : [{ degree: langData.education.original || "" }]) : safeArray(langData.education);
+        if (finalEducation.length > 0) {
+          children.push(createHeading(isTr ? "EĞİTİM" : "EDUCATION"));
+          finalEducation.forEach((edu: any) => {
+            children.push(new Paragraph({
+              children: [
+                new TextRun({ text: edu.degree, bold: true, font, size: 20 }),
+                new TextRun({ text: ` - ${edu.school} (${edu.date || ""})`, font, size: 18 })
+              ]
+            }));
+          });
+        }
+
+        // Dynamic Sections
+        const finalDynamics = safeArray(langData.dynamic_sections).map((sec: any) => ({
+          ...sec, finalDesc: isTr ? (selections.dynamic[sec.id] ? safeArray(sec.proposed_items) : safeArray(sec.original_desc)) : safeArray(sec.proposed_items)
+        }));
+        finalDynamics.forEach((sec: any) => {
+          children.push(createHeading(sec.title));
+          sec.finalDesc.forEach((item: string) => {
+            children.push(new Paragraph({ children: [new TextRun({ text: `• ${item}`, size: 18, font })], indent: { left: 360 } }));
+          });
+        });
+      }
+
+      const doc = new Document({ sections: [{ properties: {}, children }] });
       const blob = await Packer.toBlob(doc);
       saveAs(blob, `${personalInfo.fullName.replace(/\s+/g, '_')}_CV.docx`);
     } catch (err) {
@@ -819,15 +933,6 @@ export default function App() {
           </div>
 
           <div className="flex gap-2">
-             <button 
-               onClick={handleDownloadPDF} 
-               disabled={isExporting}
-               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-all shadow-md disabled:opacity-50"
-             >
-               {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-               PDF İndir
-             </button>
-
              <div className="flex bg-slate-700 rounded-lg p-1 overflow-x-auto hide-scrollbar max-w-[150px] sm:max-w-none">
                <button onClick={() => setSelectedTemplate('modern')} title="Modern" className={`px-2 sm:px-3 py-1.5 rounded-md text-xs font-bold transition-all ${selectedTemplate === 'modern' ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
                   M
