@@ -243,6 +243,11 @@ export default function App() {
       Ayrıca bu hedef pozisyona özel PROFESYONEL BİR ÖN YAZI (Cover Letter) oluştur.
       Son olarak TÜM İÇERİKLERİ İNGİLİZCEYE ÇEVİR.
       
+      ATS SKORLAMA GÖREVİ:
+      1. Kullanıcının ESKİ (ilk yüklediği) CV'sine 100 üzerinden bir ATS skoru ver.
+      2. Senin oluşturduğun YENİ (zenginleştirilmiş) CV'ye 100 üzerinden bir ATS skoru ver.
+      Skorları verirken anahtar kelime uyumu, format, detaylandırma ve profesyonellik kriterlerini baz al.
+
       ÇOK ÖNEMLİ KURALLAR:
       1. İş deneyimlerini SONDAN BAŞA (en yeni tarihli en üstte) kronolojik olarak diz.
       2. En son tarihli (en yeni) 5 iş deneyimini detaylı şekilde (başarılar, görevler) yaz.
@@ -253,9 +258,11 @@ export default function App() {
       KULLANICININ ONAYLADIĞI İŞLER:
       ${confirmedList.length > 0 ? confirmedList.join('\n') : 'Ekstra mülakat verisi yok.'}
       HEDEF POZİSYON: ${targetJob || "Belirtilmemiş"}
-
+ 
       JSON ŞEMASI (Lütfen SADECE bu şemada yanıt ver):
       {
+        "ats_score_original": 45,
+        "ats_score_proposed": 85,
         "general_review": "Genel değerlendirme (Türkçe)",
         "cv": {
           "tr": {
@@ -300,7 +307,8 @@ export default function App() {
         contents: [{ parts: contents }],
         config: {
           systemInstruction: systemPrompt,
-          responseMimeType: "application/json"
+          responseMimeType: "application/json",
+          temperature: 0.1,
         }
       });
       
@@ -320,7 +328,7 @@ export default function App() {
         data.cv.tr.dynamic_sections.forEach((s: any) => initSel.dynamic[s.id] = true);
       }
       setSelections(initSel);
-      setStep('review');
+      setStep('ats_report');
     } catch (err: any) {
       console.error("AI Error:", err);
       setError(`CV oluşturulurken bir hata oluştu: ${err.message || "Bilinmeyen hata"}`);
@@ -1006,7 +1014,7 @@ export default function App() {
             <ChevronRight className="w-4 h-4 text-slate-300" />
             <span className={`px-2 py-1 rounded-full ${(step === 'generating_questions' || step === 'questionnaire') ? 'bg-blue-100 text-blue-700' : 'text-slate-400'}`}>2. Mülakat</span>
             <ChevronRight className="w-4 h-4 text-slate-300" />
-            <span className={`px-2 py-1 rounded-full ${(step === 'analyzing' || step === 'review') ? 'bg-blue-100 text-blue-700' : 'text-slate-400'}`}>3. Onayla</span>
+            <span className={`px-2 py-1 rounded-full ${(step === 'analyzing' || step === 'ats_report' || step === 'review') ? 'bg-blue-100 text-blue-700' : 'text-slate-400'}`}>3. Onayla</span>
           </div>
         </div>
       </header>
@@ -1139,6 +1147,72 @@ export default function App() {
               <Loader2 className="w-16 h-16 text-blue-600 mb-6 animate-spin" />
               <h2 className="text-2xl font-bold text-slate-800 text-center">Tasarım İnşa Ediliyor...</h2>
               <p className="text-slate-500 mt-3 max-w-md text-center">Ön Yazı hazırlanıyor ve hiçbir bilgi kısaltılmadan detaylı olarak yerleştiriliyor...</p>
+            </motion.div>
+          )}
+
+          {step === 'ats_report' && analysisData && (
+            <motion.div 
+              key="ats_report"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="max-w-4xl mx-auto"
+            >
+              <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
+                <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-8 text-white text-center">
+                  <div className="inline-flex p-3 bg-blue-500/20 rounded-2xl mb-4">
+                    <Sparkles className="w-8 h-8 text-blue-400" />
+                  </div>
+                  <h2 className="text-3xl font-bold mb-2">ATS Analiz Raporu</h2>
+                  <p className="text-slate-400">CV'nizin taranabilirlik ve işe alım sistemlerine uyumluluk analizi tamamlandı.</p>
+                </div>
+
+                <div className="p-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-12">
+                    <div className="flex flex-col items-center text-center p-8 rounded-3xl bg-slate-50 border border-slate-100">
+                      <span className="text-sm font-bold uppercase text-slate-400 mb-6 tracking-widest">Eski CV Skoru</span>
+                      <div className="relative w-40 h-40 flex items-center justify-center">
+                        <svg className="w-full h-full transform -rotate-90">
+                          <circle cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-slate-200" />
+                          <circle cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="12" fill="transparent" strokeDasharray={439.8} strokeDashoffset={439.8 - (439.8 * (analysisData.ats_score_original || 0)) / 100} className="text-red-500 transition-all duration-1000" />
+                        </svg>
+                        <span className="absolute text-4xl font-black text-slate-800">{analysisData.ats_score_original || 0}%</span>
+                      </div>
+                      <p className="mt-6 text-sm text-slate-500 leading-relaxed">Mevcut CV'nizin anahtar kelime eksiklikleri ve format hataları nedeniyle elenme riski yüksekti.</p>
+                    </div>
+
+                    <div className="flex flex-col items-center text-center p-8 rounded-3xl bg-blue-50 border border-blue-100">
+                      <span className="text-sm font-bold uppercase text-blue-600 mb-6 tracking-widest">Yeni CV Skoru</span>
+                      <div className="relative w-40 h-40 flex items-center justify-center">
+                        <svg className="w-full h-full transform -rotate-90">
+                          <circle cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-blue-100" />
+                          <circle cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="12" fill="transparent" strokeDasharray={439.8} strokeDashoffset={439.8 - (439.8 * (analysisData.ats_score_proposed || 0)) / 100} className="text-blue-600 transition-all duration-1000" />
+                        </svg>
+                        <span className="absolute text-4xl font-black text-blue-700">{analysisData.ats_score_proposed || 0}%</span>
+                      </div>
+                      <p className="mt-6 text-sm text-blue-700/70 leading-relaxed font-medium">Yapay zeka ile zenginleştirilen yeni CV'niz, ATS sistemlerinden geçmek için optimize edildi.</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900 rounded-2xl p-6 text-white flex items-center justify-between gap-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                        <CheckCircle2 className="w-6 h-6 text-green-400" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-lg">İyileştirme Tamamlandı</h4>
+                        <p className="text-slate-400 text-sm">Tüm deneyimleriniz ATS dostu anahtar kelimelerle güncellendi.</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setStep('review')}
+                      className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-bold shadow-lg shadow-blue-600/20 transition-all active:scale-95 flex items-center gap-2"
+                    >
+                      Sonuçları Görüntüle <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
             </motion.div>
           )}
 
