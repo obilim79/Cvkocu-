@@ -328,7 +328,7 @@ export default function App() {
         data.cv.tr.dynamic_sections.forEach((s: any) => initSel.dynamic[s.id] = true);
       }
       setSelections(initSel);
-      setStep('ats_report');
+      setStep('review');
     } catch (err: any) {
       console.error("AI Error:", err);
       setError(`CV oluşturulurken bir hata oluştu: ${err.message || "Bilinmeyen hata"}`);
@@ -1014,7 +1014,7 @@ export default function App() {
             <ChevronRight className="w-4 h-4 text-slate-300" />
             <span className={`px-2 py-1 rounded-full ${(step === 'generating_questions' || step === 'questionnaire') ? 'bg-blue-100 text-blue-700' : 'text-slate-400'}`}>2. Mülakat</span>
             <ChevronRight className="w-4 h-4 text-slate-300" />
-            <span className={`px-2 py-1 rounded-full ${(step === 'analyzing' || step === 'ats_report' || step === 'review') ? 'bg-blue-100 text-blue-700' : 'text-slate-400'}`}>3. Onayla</span>
+            <span className={`px-2 py-1 rounded-full ${(step === 'analyzing' || step === 'ats_report' || step === 'review' || step === 'final') ? 'bg-blue-100 text-blue-700' : 'text-slate-400'}`}>3. Onayla</span>
           </div>
         </div>
       </header>
@@ -1205,10 +1205,10 @@ export default function App() {
                       </div>
                     </div>
                     <button 
-                      onClick={() => setStep('review')}
+                      onClick={() => setStep('final')}
                       className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-bold shadow-lg shadow-blue-600/20 transition-all active:scale-95 flex items-center gap-2"
                     >
-                      Sonuçları Görüntüle <ChevronRight className="w-5 h-5" />
+                      Final CV'yi Gör <ChevronRight className="w-5 h-5" />
                     </button>
                   </div>
                 </div>
@@ -1275,8 +1275,8 @@ export default function App() {
                 ))}
               </div>
               <div className="mt-10 mb-20 text-center border-t border-slate-200 pt-8">
-                <button onClick={() => setStep('final')} className="bg-slate-900 hover:bg-slate-800 text-white text-lg font-bold py-4 px-12 rounded-xl shadow-xl transition-transform active:scale-95 flex items-center gap-2 mx-auto">
-                  Sonucu Görüntüle <ChevronRight className="w-5 h-5"/>
+                <button onClick={() => setStep('ats_report')} className="bg-slate-900 hover:bg-slate-800 text-white text-lg font-bold py-4 px-12 rounded-xl shadow-xl transition-transform active:scale-95 flex items-center gap-2 mx-auto">
+                  ATS Analizini Gör <ChevronRight className="w-5 h-5"/>
                 </button>
               </div>
             </motion.div>
